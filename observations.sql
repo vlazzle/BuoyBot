@@ -2,7 +2,7 @@
 
 CREATE TABLE observations
 (
-    uid integer PRIMARY KEY AUTOINCREMENT,
+    uid serial NOT NULL,
     observationtime timestamp,
     windspeed real,
     winddirection varchar (3),
@@ -12,5 +12,14 @@ CREATE TABLE observations
     meanwavedirection varchar (3),
     airtemperature real,
     watertemperature real,
-    rowcreated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+    rowcreated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT clock_timestamp()
 );
+
+-- Extract CSV
+-- \copy (SELECT observationtime, significantwaveheight, dominantwaveperiod, averageperiod, airtemperature, watertemperature FROM observations) TO data.csv CSV DELIMITER ',';
+
+-- Select Max wave height ever
+-- SELECT * FROM observations ORDER BY significantwaveheight DESC LIMIT 1;
+
+-- Select Max wave height in given year
+-- SELECT * FROM observations WHERE EXTRACT(year FROM "rowcreated") = 2016 ORDER BY significantwaveheight DESC LIMIT 1;

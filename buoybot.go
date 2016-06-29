@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/ChimeraCoder/anaconda"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 // URL format for SF Buoy Observations
@@ -66,7 +66,7 @@ func main() {
 
 	// Load database
 	var err error
-	db, err = sql.Open("sqlite3", config.DatabaseFile)
+	db, err = sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -4,6 +4,5 @@
   "ConsumerSecret": "xxxxxxxxxx",
   "Token": "xxxxxxxxxxxxxxxxxxxx",
   "TokenSecret": "xxxxxxxxxx",
-  "DatabaseFile": "./xxxx.db",
   "BuoyId": "46026"
 }
