@@ -1,12 +1,9 @@
-//  rename this config.json and add configuration data below
 {
-  "UserName": "twittername", // no @ symbol
+  "UserName": "twittername",
   "ConsumerKey": "xxxxxxxxxx",
   "ConsumerSecret": "xxxxxxxxxx",
   "Token": "xxxxxxxxxxxxxxxxxxxx",
   "TokenSecret": "xxxxxxxxxx",
-  "DatabaseUrl": "xx.xxx.xx.xx",
-  "DatabaseUser": "xxxxx",
-  "DatabasePassword": "xxxxxxxx",
-  "DatabaseName": "xxxx"
+  "DatabaseFile": "./xxxx.db",
+  "BuoyId": "46026"
 }

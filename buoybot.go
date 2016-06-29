@@ -3,12 +3,10 @@
 // The MIT license can be found in the LICENSE file.
 
 // BuoyBot 1.5
-// Obtains latest observation for NBDC Station 46026
+// Obtains latest observation for NBDC Stations
 // Saves observation to database
-// Obtains next tide from database
-// Tweets observation and tide prediction from @SFBuoy
+// Tweets observation
 // See README.md for setup information
-// Note tide data from github.com/johnbeil/tidecrawler
 
 package main
 
@@ -26,14 +24,11 @@ import (
 	"time"
 
 	"github.com/ChimeraCoder/anaconda"
-	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-// First two rows of text file, fixed width delimited, used for debugging
-const header = "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS PTDY  TIDE\n#yr  mo dy hr mn degT m/s  m/s     m   sec   sec degT   hPa  degC  degC  degC  nmi  hPa    ft"
-
-// URL for SF Buoy Observations
-const noaaURL = "http://www.ndbc.noaa.gov/data/realtime2/46026.txt"
+// URL format for SF Buoy Observations
+const noaaURLFmt = "http://www.ndbc.noaa.gov/data/realtime2/%s.txt"
 
 // Observation struct stores buoy observation data
 type Observation struct {
@@ -48,27 +43,15 @@ type Observation struct {
 	WaterTemperature      float64
 }
 
-// Config struct stores Twitter and Database credentials
+// Config struct stores Twitter and Database credentials and buoy ID
 type Config struct {
 	UserName         string `json:"UserName"`
 	ConsumerKey      string `json:"ConsumerKey"`
 	ConsumerSecret   string `json:"ConsumerSecret"`
 	Token            string `json:"Token"`
 	TokenSecret      string `json:"TokenSecret"`
-	DatabaseURL      string `json:"DatabaseUrl"`
-	DatabaseUser     string `json:"DatabaseUser"`
-	DatabasePassword string `json:"DatabasePassword"`
-	DatabaseName     string `json:"DatabaseName"`
-}
-
-// Tide stores a tide prediction from the database
-type Tide struct {
-	Date         string
-	Day          string
-	Time         string
-	PredictionFt float64
-	PredictionCm int64
-	HighLow      string
+	DatabaseFile     string `json:"DatabaseFile"`
+	BuoyId           string `json:"BuoyId"`
 }
 
 // Variable for database
@@ -82,10 +65,8 @@ func main() {
 	loadConfig(&config)
 
 	// Load database
-	dbinfo := fmt.Sprintf("user=%s password=%s host=%s dbname=%s sslmode=disable",
-		config.DatabaseUser, config.DatabasePassword, config.DatabaseURL, config.DatabaseName)
 	var err error
-	db, err = sql.Open("postgres", dbinfo)
+	db, err = sql.Open("sqlite3", config.DatabaseFile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -99,19 +80,13 @@ func main() {
 
 	// Get latest observation and store in struct
 	var observation Observation
-	observation = getObservation()
+	observation = getObservation(config.BuoyId)
 
 	// Save latest observation in database
 	saveObservation(observation)
 
-	// Obtain next tide from database
-	tide := getTide()
-
-	// Format tide
-	tideOutput := processTide(tide)
-
-	// Format observation given Observation and tideOutput
-	observationOutput := formatObservation(observation, tideOutput)
+	// Format observation given Observation
+	observationOutput := formatObservation(observation)
 
 	// Tweet observation at 0000, 0600, 0800, 1000, 1200, 1400, 1600|| 1800 PST
 	t := time.Now()
@@ -127,7 +102,8 @@ func main() {
 }
 
 // Fetches and parses latest NBDC observation and returns data in Observation struct
-func getObservation() Observation {
+func getObservation(buoyId string) Observation {
+	var noaaURL = fmt.Sprintf(noaaURLFmt, buoyId)
 	observationRaw := getDataFromURL(noaaURL)
 	observationData := parseData(observationRaw)
 	return observationData
@@ -176,11 +152,15 @@ func getDataFromURL(url string) (body []byte) {
 func loadConfig(config *Config) {
 	// Load path to config from CONFIGPATH environment variable
 	configpath := os.Getenv("CONFIGPATH")
-	file, _ := os.Open(configpath)
-	decoder := json.NewDecoder(file)
-	err := decoder.Decode(&config)
-	if err != nil {
-		log.Fatal("Error loading config.json:", err)
+	if configpath != "" {
+		file, _ := os.Open(configpath)
+		decoder := json.NewDecoder(file)
+		err := decoder.Decode(&config)
+		if err != nil {
+			log.Fatal("Error loading config.json:", err)
+		}
+	} else {
+		log.Fatal("CONFIGPATH environment variable not specified")
 	}
 }
 
@@ -255,9 +235,9 @@ func parseData(d []byte) Observation {
 	return o
 }
 
-// Given Observation and tide string, returns formatted text for tweet
-func formatObservation(o Observation, tide string) string {
-	output := fmt.Sprint(o.Date.Format(time.RFC822), "\nSwell: ", strconv.FormatFloat(float64(o.SignificantWaveHeight), 'f', 1, 64), "ft at ", o.DominantWavePeriod, " sec from ", o.MeanWaveDirection, "\nWind: ", strconv.FormatFloat(float64(o.WindSpeed), 'f', 0, 64), "mph from ", o.WindDirection, "\n", tide, "\nTemp: Air ", o.AirTemperature, "F / Water: ", o.WaterTemperature, "F")
+// Given Observation, returns formatted text for tweet
+func formatObservation(o Observation) string {
+	output := fmt.Sprint(o.Date.Format(time.RFC822), "\nSwell: ", strconv.FormatFloat(float64(o.SignificantWaveHeight), 'f', 1, 64), "ft at ", o.DominantWavePeriod, " sec from ", o.MeanWaveDirection, "\nWind: ", strconv.FormatFloat(float64(o.WindSpeed), 'f', 0, 64), "mph from ", o.WindDirection, "\n", "\nTemp: Air ", o.AirTemperature, "F / Water: ", o.WaterTemperature, "F")
 	return output
 }
 
@@ -314,26 +294,4 @@ func Round(f float64) float64 {
 func RoundPlus(f float64, places int) float64 {
 	shift := math.Pow(10, float64(places))
 	return Round(f*shift) / shift
-}
-
-// getTide selects the next tide prediction from the database and returns a Tide struct
-func getTide() Tide {
-	var tide Tide
-	err := db.QueryRow("select date, day, time, predictionft, highlow from tidedata where datetime >= current_timestamp order by datetime limit 1").Scan(&tide.Date, &tide.Day, &tide.Time, &tide.PredictionFt, &tide.HighLow)
-	if err != nil {
-		log.Fatal("getTide function error:", err)
-	}
-	return tide
-}
-
-// processTide returns a formatted string given a Tide struct
-func processTide(t Tide) string {
-	if t.HighLow == "H" {
-		t.HighLow = "High"
-	} else {
-		t.HighLow = "Low"
-	}
-	s := "Tide: " + t.HighLow + " " + strconv.FormatFloat(float64(t.PredictionFt), 'f', 1, 64) + "ft at " + t.Time
-	// fmt.Println(s)
-	return s
 }
