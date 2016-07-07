@@ -33,8 +33,6 @@ const noaaURLFmt = "http://www.ndbc.noaa.gov/data/realtime2/%s.txt"
 // Observation struct stores buoy observation data
 type Observation struct {
 	Date                  time.Time
-	WindDirection         string
-	WindSpeed             float64
 	SignificantWaveHeight float64
 	DominantWavePeriod    int
 	AveragePeriod         float64
@@ -110,7 +108,7 @@ func getObservation(buoyId string) Observation {
 
 // Given Observation struct, saves most recent observation in database
 func saveObservation(o Observation) {
-	_, err := db.Exec("INSERT INTO observations(observationtime, windspeed, winddirection, significantwaveheight, dominantwaveperiod, averageperiod, meanwavedirection, watertemperature) VALUES($1, $2, $3, $4, $5, $6, $7, $8)", o.Date, o.WindSpeed, o.WindDirection, o.SignificantWaveHeight, o.DominantWavePeriod, o.AveragePeriod, o.MeanWaveDirection, o.WaterTemperature)
+	_, err := db.Exec("INSERT INTO observations(observationtime, significantwaveheight, dominantwaveperiod, averageperiod, meanwavedirection, watertemperature) VALUES($1, $2, $3, $4, $5, $6)", o.Date, o.SignificantWaveHeight, o.DominantWavePeriod, o.AveragePeriod, o.MeanWaveDirection, o.WaterTemperature)
 	if err != nil {
 		log.Fatal("Error saving observation:", err)
 	}
@@ -183,14 +181,6 @@ func parseData(d []byte) Observation {
 	wavedegrees, _ := strconv.ParseInt(datafield[11], 0, 64)
 	wavecardinal := direction(wavedegrees)
 
-	// Convert wind speed from m/s to mph
-	windspeedms, _ := strconv.ParseFloat((datafield[6]), 64)
-	windspeedmph := windspeedms / 0.44704
-
-	// Convert wind direction from degrees to cardinal
-	winddegrees, _ := strconv.ParseInt(datafield[5], 0, 64)
-	windcardinal := direction(winddegrees)
-
 	// Convert water temp from C to F
 	watertempC, _ := strconv.ParseFloat(datafield[14], 64)
 	watertempF := watertempC*9/5 + 32
@@ -211,8 +201,6 @@ func parseData(d []byte) Observation {
 	// Create Observation struct and populate with parsed data
 	var o Observation
 	o.Date = t
-	o.WindDirection = windcardinal
-	o.WindSpeed = windspeedmph
 	o.SignificantWaveHeight = waveheightfeet
 	o.DominantWavePeriod, err = strconv.Atoi(datafield[9])
 	if err != nil {
@@ -230,7 +218,7 @@ func parseData(d []byte) Observation {
 
 // Given Observation, returns formatted text for tweet
 func formatObservation(o Observation) string {
-	output := fmt.Sprint(o.Date.Format(time.RFC822), "\nSwell: ", strconv.FormatFloat(float64(o.SignificantWaveHeight), 'f', 1, 64), "ft at ", o.DominantWavePeriod, " sec from ", o.MeanWaveDirection, "\nWind: ", strconv.FormatFloat(float64(o.WindSpeed), 'f', 0, 64), "mph from ", o.WindDirection, "\n", "Water: ", o.WaterTemperature, "F")
+	output := fmt.Sprint(o.Date.Format(time.RFC822), "\nSwell: ", strconv.FormatFloat(float64(o.SignificantWaveHeight), 'f', 1, 64), "ft at ", o.DominantWavePeriod, " sec from ", o.MeanWaveDirection, "\n", "Water: ", o.WaterTemperature, "F")
 	return output
 }
 
