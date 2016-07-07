@@ -39,7 +39,6 @@ type Observation struct {
 	DominantWavePeriod    int
 	AveragePeriod         float64
 	MeanWaveDirection     string
-	AirTemperature        float64
 	WaterTemperature      float64
 }
 
@@ -111,7 +110,7 @@ func getObservation(buoyId string) Observation {
 
 // Given Observation struct, saves most recent observation in database
 func saveObservation(o Observation) {
-	_, err := db.Exec("INSERT INTO observations(observationtime, windspeed, winddirection, significantwaveheight, dominantwaveperiod, averageperiod, meanwavedirection, airtemperature, watertemperature) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)", o.Date, o.WindSpeed, o.WindDirection, o.SignificantWaveHeight, o.DominantWavePeriod, o.AveragePeriod, o.MeanWaveDirection, o.AirTemperature, o.WaterTemperature)
+	_, err := db.Exec("INSERT INTO observations(observationtime, windspeed, winddirection, significantwaveheight, dominantwaveperiod, averageperiod, meanwavedirection, watertemperature) VALUES($1, $2, $3, $4, $5, $6, $7, $8)", o.Date, o.WindSpeed, o.WindDirection, o.SignificantWaveHeight, o.DominantWavePeriod, o.AveragePeriod, o.MeanWaveDirection, o.WaterTemperature)
 	if err != nil {
 		log.Fatal("Error saving observation:", err)
 	}
@@ -192,11 +191,6 @@ func parseData(d []byte) Observation {
 	winddegrees, _ := strconv.ParseInt(datafield[5], 0, 64)
 	windcardinal := direction(winddegrees)
 
-	// Convert air temp from C to F
-	airtempC, _ := strconv.ParseFloat(datafield[13], 64)
-	airtempF := airtempC*9/5 + 32
-	airtempF = RoundPlus(airtempF, 1)
-
 	// Convert water temp from C to F
 	watertempC, _ := strconv.ParseFloat(datafield[14], 64)
 	watertempF := watertempC*9/5 + 32
@@ -229,7 +223,6 @@ func parseData(d []byte) Observation {
 		log.Fatal("o.AveragePeriod:", err)
 	}
 	o.MeanWaveDirection = wavecardinal
-	o.AirTemperature = airtempF
 	o.WaterTemperature = watertempF
 
 	return o
@@ -237,7 +230,7 @@ func parseData(d []byte) Observation {
 
 // Given Observation, returns formatted text for tweet
 func formatObservation(o Observation) string {
-	output := fmt.Sprint(o.Date.Format(time.RFC822), "\nSwell: ", strconv.FormatFloat(float64(o.SignificantWaveHeight), 'f', 1, 64), "ft at ", o.DominantWavePeriod, " sec from ", o.MeanWaveDirection, "\nWind: ", strconv.FormatFloat(float64(o.WindSpeed), 'f', 0, 64), "mph from ", o.WindDirection, "\n", "\nTemp: Air ", o.AirTemperature, "F / Water: ", o.WaterTemperature, "F")
+	output := fmt.Sprint(o.Date.Format(time.RFC822), "\nSwell: ", strconv.FormatFloat(float64(o.SignificantWaveHeight), 'f', 1, 64), "ft at ", o.DominantWavePeriod, " sec from ", o.MeanWaveDirection, "\nWind: ", strconv.FormatFloat(float64(o.WindSpeed), 'f', 0, 64), "mph from ", o.WindDirection, "\n", "Water: ", o.WaterTemperature, "F")
 	return output
 }
 
